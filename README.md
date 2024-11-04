@@ -1,0 +1,1 @@
+A simple URL shortener web application built with the Go programming language. The primary purpose of the app is to take long URLs provided by users, generate shortened versions (short codes), and store these mappings locally.
