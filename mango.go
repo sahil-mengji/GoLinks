@@ -1,52 +1,87 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"math/rand"
 	"net/http"
+	"strings"
+	"time"
 )
 
+var urlMap = make(map[string]string)
 
-// Create a DS for mapping between shortened version and normal URL
+func enableCORS(w http.ResponseWriter) {
+	w.Header().Set("Access-Control-Allow-Origin", "*") // Allow only your frontend origin
+	w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+}
 
-// Generate a random short code
 func generateShortCode() string {
-
+	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	const codeLength = 6
+	seededRand := rand.New(rand.NewSource(time.Now().UnixNano()))
+	code := make([]byte, codeLength)
+	for i := range code {
+		code[i] = charset[seededRand.Intn(len(charset))]
+	}
+	return string(code)
 }
 
-// Shorten URL handler
+
 func shortenURLHandler(w http.ResponseWriter, r *http.Request) {
+	
+	if r.Method != http.MethodPost {
+		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+		return
+	}
 
-	// Parse original URL from request body
+	
+	var requestBody struct {
+		URL string `json:"url"`
+	}
+	err := json.NewDecoder(r.Body).Decode(&requestBody)
+	if err != nil || requestBody.URL == "" {
+		http.Error(w, "Invalid URL", http.StatusBadRequest)
+		return
+	}
 
-	// Generate unique short code
 
-	// Store the mapping
+	shortCode := generateShortCode()
+	urlMap[shortCode] = requestBody.URL 
 
-	// Send back the short URL as response
 
+	response := map[string]string{"short_url": fmt.Sprintf("http://localhost:8080/r/%s", shortCode)}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
 }
 
-// Redirect handler
+
 func redirectHandler(w http.ResponseWriter, r *http.Request) {
+	
+	shortCode := strings.TrimPrefix(r.URL.Path, "/r/")
+	originalURL, exists := urlMap[shortCode]
+	if !exists {
+		http.Error(w, "URL not found", http.StatusNotFound)
+		return
+	}
 
-	// read the request, access your DS to find the full version
-	// of URL, redirect to that URL
+
+	http.Redirect(w, r, originalURL, http.StatusFound)
 }
 
-// Serve frontend index.html file
 func indexHandler(w http.ResponseWriter, r *http.Request) {
-
+	http.ServeFile(w, r, "index.html")
 }
 
 func main() {
 
-	// Route for serving the frontend page
 	http.HandleFunc("/", indexHandler)
 
-	// Route for the API to shorten URLs
+
 	http.HandleFunc("/shorten", shortenURLHandler)
 
-	// Route for handling redirects
+
 	http.HandleFunc("/r/", redirectHandler)
 
 	fmt.Println("Server running on http://localhost:8080")
